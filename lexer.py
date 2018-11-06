@@ -1,10 +1,13 @@
 # -*- coding:utf-8 -*-
 import collections
 import re
-from token import NumToken
+from token import NumToken, IdToken, StrToken
 
-
-NUMPAT = '(\d+)'
+# TODO:++，+的区分是否需要词法结合语法分析才可以做到？
+NUMPAT = r'(\d+)'
+IDPAT = r'([_\w][_\w\d]*|\|\||&&|!|==|<=|>=|<|>)'
+STRPAT = r'("(\\\"|\\\\|\\n|[^"])*")'
+PAT = '|'.join([NUMPAT, IDPAT, STRPAT])
 
 
 class Lexer(object):
@@ -34,24 +37,89 @@ class Lexer(object):
 
 			line = line.strip()
 			while line:
-				matchobj = re.match(NUMPAT, line)
+				matchobj = re.match(PAT, line)
 				if not matchobj:
-					raise Exception('invalid token')
+					raise Exception('invalid token %s' % line)
 
-				word = matchobj.group(1)
-				self.queue.append(NumToken(int(word)))
+				if matchobj.group(1):
+					word = matchobj.group(1)
+					self.queue.append(NumToken(int(word)))
+				elif matchobj.group(2):
+					word = matchobj.group(2)
+					self.queue.append(IdToken(word))
+				elif matchobj.group(3):
+					word = matchobj.group(3)
+					self.queue.append(StrToken(word[1:-1]))
 
 				line = line[len(word):]
 				line = line.strip()
 
-		return True
+		return len(self.queue) >= lenth
 
 
 if __name__ == "__main__":
-	with open('test.txt') as f:
-		lexer = Lexer(f)
+	class TestReader(object):
+		def __init__(self, lines):
+			self.lines = lines
+			self.lino = 0
 
-		print lexer.peek(0)
-		print lexer.read()
+		def readline(self):
+			if self.lino >= len(self.lines):
+				return ""
 
-		print lexer.peek(0)
+			ret = self.lines[self.lino]
+			self.lino += 1
+			return ret
+
+	test_cases = [
+		[
+			["123 234"],
+			[
+				["peek", 0, NumToken(123)],
+				["read", 0, NumToken(123)],
+				["read", 0, NumToken(234)],
+			]
+		],
+		[
+			["abc cde 123"],
+			[
+				["peek", 0, IdToken("abc")],
+				["peek", 1, IdToken("cde")],
+				["peek", 2, NumToken(123)],
+				["read", 0, IdToken("abc")],
+				["read", 0, IdToken("cde")],
+			]
+		],
+		[
+			["&&!<=dasda>=<>"],
+			[
+				["read", 0, IdToken("&&")],
+				["read", 0, IdToken("!")],
+				["read", 0, IdToken("<=")],
+				["read", 0, IdToken("dasda")],
+				["read", 0, IdToken(">=")],
+				["read", 0, IdToken("<")],
+				["read", 0, IdToken(">")],
+			]
+		],
+		[
+			[r'"\"Hello" "World"'],
+			[
+				["read", 0, StrToken(r"\"Hello")],
+				["read", 0, StrToken(r"World")],
+			],
+		],
+	]
+
+	for content, cases in test_cases:
+		lexer = Lexer(TestReader(content))
+		for op, oprand, expect in cases:
+			if op == "peek":
+				ret = lexer.peek(oprand)
+			elif op == 'read':
+				ret = lexer.read()
+			else:
+				raise Exception("unexpected op" + op)
+
+			if ret != expect:
+				print "unexpected val, should be [%s], ouput [%s]" % (str(expect), str(ret))
