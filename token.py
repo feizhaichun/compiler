@@ -2,8 +2,9 @@
 
 
 class Token(object):
-	def __init__(self):
+	def __init__(self, val):
 		super(Token, self).__init__()
+		self.val = val
 
 	def __eq__(self, other):
 		if type(other) != self.__class__:
@@ -16,8 +17,7 @@ class Token(object):
 
 class NumToken(Token):
 	def __init__(self, val):
-		super(NumToken, self).__init__()
-		self.val = val
+		super(NumToken, self).__init__(val)
 
 	def __str__(self):
 		return 'NumToken val : ' + str(self.val)
@@ -25,8 +25,7 @@ class NumToken(Token):
 
 class IdToken(Token):
 	def __init__(self, val):
-		super(IdToken, self).__init__()
-		self.val = val
+		super(IdToken, self).__init__(val)
 
 	def __str__(self):
 		return 'IdToken val : ' + str(self.val)
@@ -34,8 +33,7 @@ class IdToken(Token):
 
 class StrToken(Token):
 	def __init__(self, val):
-		super(StrToken, self).__init__()
-		self.val = val
+		super(StrToken, self).__init__(val)
 
 	def __str__(self):
 		return 'StrToken val : \'%s\'' % self.val

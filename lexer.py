@@ -5,7 +5,7 @@ from token import NumToken, IdToken, StrToken
 
 # TODO:++，+的区分是否需要词法结合语法分析才可以做到？
 NUMPAT = r'(\d+)'
-IDPAT = r'([_\w][_\w\d]*|\|\||&&|!|==|<=|>=|<|>)'
+IDPAT = r'([_\w][_\w\d]*|\|\||&&|!|==|<=|>=|<|>|\+|\*|\(|\))'
 STRPAT = r'("(\\\"|\\\\|\\n|[^"])*")'
 PAT = '|'.join([NUMPAT, IDPAT, STRPAT])
 
@@ -55,71 +55,3 @@ class Lexer(object):
 				line = line.strip()
 
 		return len(self.queue) >= lenth
-
-
-if __name__ == "__main__":
-	class TestReader(object):
-		def __init__(self, lines):
-			self.lines = lines
-			self.lino = 0
-
-		def readline(self):
-			if self.lino >= len(self.lines):
-				return ""
-
-			ret = self.lines[self.lino]
-			self.lino += 1
-			return ret
-
-	test_cases = [
-		[
-			["123 234"],
-			[
-				["peek", 0, NumToken(123)],
-				["read", 0, NumToken(123)],
-				["read", 0, NumToken(234)],
-			]
-		],
-		[
-			["abc cde 123"],
-			[
-				["peek", 0, IdToken("abc")],
-				["peek", 1, IdToken("cde")],
-				["peek", 2, NumToken(123)],
-				["read", 0, IdToken("abc")],
-				["read", 0, IdToken("cde")],
-			]
-		],
-		[
-			["&&!<=dasda>=<>"],
-			[
-				["read", 0, IdToken("&&")],
-				["read", 0, IdToken("!")],
-				["read", 0, IdToken("<=")],
-				["read", 0, IdToken("dasda")],
-				["read", 0, IdToken(">=")],
-				["read", 0, IdToken("<")],
-				["read", 0, IdToken(">")],
-			]
-		],
-		[
-			[r'"\"Hello" "World"'],
-			[
-				["read", 0, StrToken(r"\"Hello")],
-				["read", 0, StrToken(r"World")],
-			],
-		],
-	]
-
-	for content, cases in test_cases:
-		lexer = Lexer(TestReader(content))
-		for op, oprand, expect in cases:
-			if op == "peek":
-				ret = lexer.peek(oprand)
-			elif op == 'read':
-				ret = lexer.read()
-			else:
-				raise Exception("unexpected op" + op)
-
-			if ret != expect:
-				print "unexpected val, should be [%s], ouput [%s]" % (str(expect), str(ret))
