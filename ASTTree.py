@@ -37,3 +37,40 @@ class ASTList(ASTNode):
 class BinaryExpr(ASTList):
 	def __init__(self, token_list):
 		super(BinaryExpr, self).__init__(token_list)
+
+
+# 空语句
+class NullExpr(ASTList):
+	def __init__(self, token_list):
+		super(BinaryExpr, self).__init__(token_list)
+
+
+# if
+class IfExpr(ASTList):
+	def __init__(self, token_list):
+		if len(token_list) != 2 and len(token_list) != 3:
+			print token_list
+			raise Exception("len(token_list) in if should be 2 or 3 : %s", token_list)
+		self.token_list = token_list
+
+
+# while
+class WhileExpr(ASTList):
+	def __init__(self, token_list):
+		if len(token_list) != 2:
+			raise Exception("len(token_list) in if should be 2 or 3 : %s", token_list)
+		super(WhileExpr, self).__init__(token_list)
+
+
+# -
+class NegExpr(ASTList):
+	def __init__(self, token_list):
+		if len(token_list) != 2:
+			raise Exception("len(token_list) in if should be 2 or 3 : %s", token_list)
+		super(NegExpr, self).__init__(token_list)
+
+
+# block
+class BlockExpr(ASTList):
+	def __init__(self, token_list):
+		super(BlockExpr, self).__init__(token_list)

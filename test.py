@@ -1,14 +1,19 @@
 # -*- coding:utf-8 -*-
 from lexer import Lexer
-from token import NumToken, IdToken, StrToken
+from token import NumToken, IdToken, StrToken, EOFToken, EOLToken
 from exp_parser import Parser
 import time
 
 
 class TestReader(object):
 	def __init__(self, lines):
-		self.lines = lines
 		self.lino = 0
+		self.lines = []
+
+		for line in lines:
+			for l in line.split('\n'):
+				if len(l) > 0:
+					self.lines.append(l)
 
 	def readline(self):
 		if self.lino >= len(self.lines):
@@ -28,7 +33,6 @@ def test_case_result(kind, success, failed):
 
 
 if __name__ == "__main__":
-
 	# lexer
 	success, failed = 0, 0
 
@@ -39,6 +43,8 @@ if __name__ == "__main__":
 				["peek", 0, NumToken(123)],
 				["read", 0, NumToken(123)],
 				["read", 0, NumToken(234)],
+				["read", 0, EOLToken()],
+				["read", 0, EOFToken()],
 			]
 		],
 		[
@@ -94,17 +100,50 @@ if __name__ == "__main__":
 	success, failed = 0, 0
 	test_cases = [
 		[
-			["1 + 2 * 3", ],
-			"( 1 + ( 2 * 3 ) )",
-		],
-		[
-			["(1 + 2) * 3", ],
+			["1 + 2 * 3;", ],
 			"( ( 1 + 2 ) * 3 )",
 		],
+		[
+			["(1 + 2) / 3", ],
+			"( ( 1 + 2 ) / 3 )",
+		],
+		[
+			[
+			'''
+			if x < 10 {
+				y = 15; y = a + b
+				z = a + b
+			} else {
+				t = a + b
+				a = b = c = x + y
+			}
+			''',
+			],
+			"( ( x < 10 ) ( ( y = 15 ) ( y = ( a + b ) ) ( z = ( a + b ) ) ) ( ( t = ( a + b ) ) ( a = ( b = ( c = ( x + y ) ) ) ) ) )"
+		],
+		[
+			[
+			'''
+			while i < 10 {
+				if i == 2 {
+					a = i + 2
+				} else {
+					if i % 2 == 0 {
+						i += 3
+					} else {
+						i += 2
+					}
+				}
+			}
+			'''
+			],
+			"( ( i < 10 ) ( ( ( i == 2 ) ( ( a = ( i + 2 ) ) ) ( ( ( ( i % 2 ) == 0 ) ( ( i += 3 ) ) ( ( i += 2 ) ) ) ) ) ) )",
+		],
+
 	]
 
 	for case, expect in test_cases:
-		ret = str(Parser(Lexer(TestReader(case))).expression())
+		ret = str(Parser(Lexer(TestReader(case))).program())
 		if ret != expect:
 			print "input\t:\t%s\nret\t\t:\t%s\nexpect\t:\t%s\n\n" % (case, ret, expect)
 			failed += 1

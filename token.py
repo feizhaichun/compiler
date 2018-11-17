@@ -37,3 +37,19 @@ class StrToken(Token):
 
 	def __str__(self):
 		return 'StrToken val : \'%s\'' % self.val
+
+
+class EOFToken(Token):
+	def __init__(self):
+		super(EOFToken, self).__init__(-1)
+
+	def __str__(self):
+		return 'EOFToken'
+
+
+class EOLToken(Token):
+	def __init__(self):
+		super(EOLToken, self).__init__(-1)
+
+	def __str__(self):
+		return 'EOLToken'
