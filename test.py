@@ -2,6 +2,7 @@
 from lexer import Lexer
 from token import NumToken, IdToken, StrToken, EOFToken, EOLToken
 from exp_parser import Parser
+from environment import BaseEnvironment
 import time
 
 
@@ -21,6 +22,20 @@ class TestReader(object):
 
 		ret = self.lines[self.lino]
 		self.lino += 1
+		return ret
+
+
+class TestEval(object):
+	def __init__(self, lexer, env):
+		self.lexer = lexer
+		self.env = env
+
+	def eval(self):
+		ret = None
+
+		while self.lexer.peek(0) != EOFToken():
+			ret = Parser(self.lexer).program().eval(self.env)
+
 		return ret
 
 
@@ -108,8 +123,7 @@ if __name__ == "__main__":
 			"( ( 1 + 2 ) / 3 )",
 		],
 		[
-			[
-			'''
+			['''
 			if x < 10 {
 				y = 15; y = a + b
 				z = a + b
@@ -117,13 +131,11 @@ if __name__ == "__main__":
 				t = a + b
 				a = b = c = x + y
 			}
-			''',
-			],
+			''', ],
 			"( ( x < 10 ) ( ( y = 15 ) ( y = ( a + b ) ) ( z = ( a + b ) ) ) ( ( t = ( a + b ) ) ( a = ( b = ( c = ( x + y ) ) ) ) ) )"
 		],
 		[
-			[
-			'''
+			['''
 			while i < 10 {
 				if i == 2 {
 					a = i + 2
@@ -135,8 +147,7 @@ if __name__ == "__main__":
 					}
 				}
 			}
-			'''
-			],
+			'''],
 			"( ( i < 10 ) ( ( ( i == 2 ) ( ( a = ( i + 2 ) ) ) ( ( ( ( i % 2 ) == 0 ) ( ( i += 3 ) ) ( ( i += 2 ) ) ) ) ) ) )",
 		],
 
@@ -151,3 +162,73 @@ if __name__ == "__main__":
 			success += 1
 
 	test_case_result("parser", success, failed)
+
+	test_cases = [
+		[
+			['''
+				a = 2
+				b = c = a
+			''', ],
+			[
+				"None", "a : 2, b : 2, c : 2,"
+			],
+		],
+		[
+			['''
+				a = 2
+				if a < 3 {
+					b = -4
+				} else {
+					b = 6
+				}
+
+				if a < 1 {
+					c = 3
+				} else {
+					c = 8
+				}
+			''', ],
+			[
+				"None", 'a : 2, b : -4, c : 8,',
+			],
+		],
+		[
+			['''
+				a = 3
+				b = 1
+				c = 2
+				while a > 0 {
+					b = b + 1
+					c = c + 1
+					a = a - 1
+				}
+			''', ],
+			[
+				"None", 'a : 0, b : 4, c : 5,',
+			],
+		],
+		[
+			['''
+				a = 2 * (1 + 3)
+				b = 2 - -3;;
+			''', ],
+			[
+				"None", 'a : 8, b : 5,',
+			],
+		],
+
+	]
+
+	success, failed = 0, 0
+	for case, expect in test_cases:
+		env = BaseEnvironment()
+		ret = TestEval(Lexer(TestReader(case)), env).eval()
+		if str(ret) != expect[0] or str(env) != expect[1]:
+			print "input\t:\t%s" % case
+			print "ret\t\t:\t%s\nexpect\t:\t%s" % (ret, expect[0])
+			print "env\t\t:\t%s\nexpect\t:\t%s\n" % (env, expect[1])
+			failed += 1
+		else:
+			success += 1
+
+	test_case_result("eval", success, failed)

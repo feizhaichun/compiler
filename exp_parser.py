@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
-from ASTTree import BinaryExpr, IfExpr, WhileExpr, BlockExpr, NullExpr, NegExpr, ASTLeaf
-from token import IdToken, EOLToken
+from ASTTree import BinaryExpr, IfExpr, WhileExpr, BlockExpr, NullExpr, NegExpr, NumExpr, IdExpr, StrExpr
+from token import EOLToken, NumToken, IdToken, StrToken
 
 '''
 primary		: "(" expr ")" | NUMBER | IDENTIFIER | STRING | EOL
@@ -117,7 +117,16 @@ class Parser(object):
 				raise Exception('missing ) at %s' % self.lexer.get_line())
 			self.lexer.read()
 			return ret
-		return ASTLeaf(self.lexer.read())
+
+		token = self.lexer.read()
+		if isinstance(token, NumToken):
+			return NumExpr(token)
+		elif isinstance(token, IdToken):
+			return IdExpr(token)
+		elif isinstance(token, StrToken):
+			return StrExpr(token)
+		else:
+			raise Exception('cannot find type of token : %s' % token)
 
 	def isToken(self, val):
 		return self.lexer.peek(0) == val

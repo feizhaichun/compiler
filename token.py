@@ -1,6 +1,18 @@
 # -*- coding:utf-8 -*-
 
 
+# 得到token在env中对应的值
+def get_true_value(token, env):
+	if isinstance(token, IdToken):
+		return env.get_val(token.val)
+	elif isinstance(token, StrToken) or isinstance(token, NumToken):
+		return token.val
+	elif isinstance(token, int) or isinstance(token, basestring):
+		return token
+	else:
+		raise Exception('cannot get true value : %s, env : %s' % (token, str(env)))
+
+
 class Token(object):
 	def __init__(self, val):
 		super(Token, self).__init__()

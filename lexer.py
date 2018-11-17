@@ -1,11 +1,11 @@
 # -*- coding:utf-8 -*-
 import collections
 import re
-from token import NumToken, IdToken, StrToken, EOFToken, EOLToken
+from token import IdToken, EOFToken, NumToken, StrToken, EOLToken
 
 # TODO:++，+的区分是否需要词法结合语法分析才可以做到？
 NUMPAT = r'(\d+)'
-IDPAT = r'([_\w][_\w\d]*|\|\||&&|!|==|<=|>=|<|>|\+=|\+|\*|\(|\)|/|;|if|{|}|==|=|%|while|%|else)'
+IDPAT = r'([_\w][_\w\d]*|\|\||&&|!|==|<=|>=|<|>|\+=|\+|\*|\(|\)|/|;|if|{|}|==|=|%|while|%|else|-)'
 STRPAT = r'("(\\\"|\\\\|\\n|[^"])*")'
 PAT = '|'.join([NUMPAT, IDPAT, STRPAT])
 
