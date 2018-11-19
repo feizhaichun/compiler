@@ -13,22 +13,80 @@ statement	: "if" expr block {"else" block}
 			| simple
 program		: [ statement ] (";" | EOL)
 '''
-# TODO NEXT 实现EOF， 实现Parser对上述代码的分析
 # TODO 使用算符优先算法来实现算符优先级
 
-OP = {
-	'+': -1,			# 左结合
-	'-': -1,			# 左结合
-	'*': -1,			# 左结合
-	'/': -1,			# 左结合
-	'>': -1,			# 左结合
-	'<': -1,			# 左结合
-	'==': -1,			# 左结合
-	'%': -1,			# 左结合
-	'+=': -1,			# 左结合
 
-	'=': 1,			# 右结合
-}
+class OP(object):
+	op_priority = {
+		'*': {
+			"left_combination": True,
+			"priority": 3,
+		},
+		'/': {
+			"left_combination": True,
+			"priority": 3,
+		},
+		'%': {
+			"left_combination": True,
+			"priority": 3,
+		},
+
+
+		'+': {
+			"left_combination": True,
+			"priority": 4,
+		},
+		'-': {
+			"left_combination": True,
+			"priority": 4,
+		},
+
+		'>': {
+			"left_combination": True,
+			"priority": 6,
+		},
+		'<': {
+			"left_combination": True,
+			"priority": 6,
+		},
+
+		'==': {
+			"left_combination": False,
+			"priority": 7,
+		},
+
+		'=': {
+			"left_combination": False,
+			"priority": 14,
+		},
+		'+=': {
+			"left_combination": False,
+			"priority": 14,
+		},
+
+	}
+
+	def __init__(self):
+		super(OP, self).__init__()
+
+	@classmethod
+	def is_op(cls, op):
+		return op in cls.op_priority
+
+	@classmethod
+	def is_priority(cls, op1, op2):
+		assert(isinstance(op1, IdToken))
+		assert(isinstance(op2, IdToken))
+
+		op1, op2 = op1.val, op2.val
+
+		if not cls.is_op(op1):
+			raise Exception("op : %s has not implement" % op1)
+		if not cls.is_op(op2):
+			raise Exception("op : %s has not implement" % op2)
+		if cls.op_priority[op1]["priority"] != cls.op_priority[op2]["priority"]:
+			return cls.op_priority[op1]["priority"] < cls.op_priority[op2]["priority"]
+		return cls.op_priority[op1]["left_combination"]
 
 
 class Parser(object):
@@ -84,24 +142,30 @@ class Parser(object):
 		return BlockExpr(expr)
 
 	def expr(self):
-		stk = [self.factor()]
+		ops = []
+		factors = [self.factor()]
 
 		while self.isNextOp():
 			op = self.lexer.read()
-			if self.is_op_left_combination(op):
-				prev = stk.pop()
-				stk.append(BinaryExpr([prev, op, self.factor()]))
-			else:
-				stk.append(op)
-				stk.append(self.factor())
+			factor = self.factor()
 
-		while len(stk) > 1:
-			right = stk.pop()
-			op = stk.pop()
-			left = stk.pop()
-			stk.append(BinaryExpr([left, op, right]))
+			while len(ops) and OP.is_priority(ops[-1], op):
+				f2 = factors.pop()
+				f1 = factors.pop()
+				factors.append(BinaryExpr([f1, ops.pop(), f2]))
 
-		return stk[0]
+			ops.append(op)
+			factors.append(factor)
+
+		while len(ops):
+			f2 = factors.pop()
+			f1 = factors.pop()
+			op = ops.pop()
+			factors.append(BinaryExpr([f1, op, f2]))
+
+		assert(len(factors) == 1)
+		assert(len(ops) == 0)
+		return factors[0]
 
 	def factor(self):
 		if self.isToken(IdToken('-')):
@@ -133,7 +197,4 @@ class Parser(object):
 
 	def isNextOp(self):
 		next_token = self.lexer.peek(0)
-		return any(next_token == IdToken(op) for op in OP)
-
-	def is_op_left_combination(self, op):
-		return OP[op.val] == -1
+		return isinstance(next_token, IdToken) and OP.is_op(next_token.val)

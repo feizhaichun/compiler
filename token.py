@@ -42,6 +42,9 @@ class IdToken(Token):
 	def __str__(self):
 		return 'IdToken val : ' + str(self.val)
 
+	def __repr__(self):
+		return self.__str__()
+
 
 class StrToken(Token):
 	def __init__(self, val):

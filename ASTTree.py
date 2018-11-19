@@ -9,6 +9,9 @@ class ASTNode(object):
 	def eval(self, env):
 		raise Exception('%s has not implement eval' % type(self))
 
+	def __repr__(self):
+		return self.__str__()
+
 
 # 叶子节点，代表终结符
 class ASTLeaf(ASTNode):
