@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-from token import IdToken, get_true_value
+from token import Token, IdToken, get_true_value
 
 
 class ASTNode(object):
@@ -35,10 +35,10 @@ class ASTList(ASTNode):
 	def __str__(self):
 		ret = ['(']
 		for element in self.token_list:
-			if isinstance(element, ASTNode):
-				ret.append(str(element))
-			else:
+			if isinstance(element, Token):
 				ret.append(str(element.val))
+			else:
+				ret.append(str(element))
 		ret.append(')')
 		return ' '.join(ret)
 
@@ -95,6 +95,28 @@ class NullExpr(ASTLeaf):
 
 	def eval(self, env):
 		return None
+
+
+# 函数定义
+class DefExpr(ASTList):
+	def __init__(self, token_list):
+		super(DefExpr, self).__init__(token_list)
+		assert(len(token_list) == 3)
+		self.fun_name = token_list[0]
+		self.param_list = token_list[1]
+		self.block = token_list[2]
+
+	def eval(self, env):
+		pass
+
+
+# 函数调用
+class FunCallExpr(ASTList):
+	def __init__(self, token_list):
+		super(FunCallExpr, self).__init__(token_list)
+		assert(len(token_list) == 2)
+		self.fun_name = token_list[0]
+		self.args = token_list[1]
 
 
 # if

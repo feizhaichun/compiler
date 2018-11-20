@@ -1,9 +1,10 @@
 # -*- coding:utf-8 -*-
-from ASTTree import BinaryExpr, IfExpr, WhileExpr, BlockExpr, NullExpr, NegExpr, NumExpr, IdExpr, StrExpr
+from ASTTree import BinaryExpr, IfExpr, WhileExpr, BlockExpr, NullExpr, NegExpr, NumExpr, IdExpr, StrExpr, DefExpr, FunCallExpr
 from token import EOLToken, NumToken, IdToken, StrToken
 
 '''
-primary		: "(" expr ")" | NUMBER | IDENTIFIER | STRING | EOL
+param		: IDENTIFIER
+primary		: "(" expr ")" | NUMBER | IDENTIFIER | STRING
 factor		: "-" primary | primary
 expr 		: factor {OP factor}
 block		: "{" [statement] {(";" | EOL) [statement] } "}"
@@ -98,7 +99,10 @@ class Parser(object):
 		if self.isToken(EOLToken()) or self.isToken(IdToken(';')):
 			return NullExpr([self.lexer.read()])
 
-		ret = self.statement()
+		if self.isToken(IdToken('def')):
+			ret = self.defs()
+		else:
+			ret = self.statement()
 		if not self.isToken(EOLToken()) and not self.isToken(IdToken(';')):
 			raise Exception('expected: EOL or ;, instead : （%s） at line %d ' % (self.lexer.peek(0), self.lexer.get_line()))
 		self.lexer.read()
@@ -167,6 +171,26 @@ class Parser(object):
 		assert(len(ops) == 0)
 		return factors[0]
 
+	def args(self):
+		ret = [self.expr()]
+
+		while self.isToken(IdToken(',')):
+			self.lexer.read()
+			ret.append(self.expr())
+
+		return ret
+
+	def postfix(self):
+		assert(self.isToken(IdToken('(')))
+		self.lexer.read()
+
+		ret = self.args()
+
+		assert(self.isToken(IdToken(')')))
+		self.lexer.read()
+
+		return ret
+
 	def factor(self):
 		if self.isToken(IdToken('-')):
 			self.lexer.read()
@@ -180,17 +204,56 @@ class Parser(object):
 			if not self.isToken(IdToken(')')):
 				raise Exception('missing ) at %s' % self.lexer.get_line())
 			self.lexer.read()
-			return ret
-
-		token = self.lexer.read()
-		if isinstance(token, NumToken):
-			return NumExpr(token)
-		elif isinstance(token, IdToken):
-			return IdExpr(token)
-		elif isinstance(token, StrToken):
-			return StrExpr(token)
 		else:
-			raise Exception('cannot find type of token : %s' % token)
+			token = self.lexer.read()
+			if isinstance(token, NumToken):
+				ret = NumExpr(token)
+			elif isinstance(token, IdToken):
+				assert(token != EOLToken)
+				ret = IdExpr(token)
+			elif isinstance(token, StrToken):
+				ret = StrExpr(token)
+			else:
+				raise Exception('cannot find type of token : %s' % token)
+
+		if self.isToken(IdToken('(')):
+			postfix = self.postfix()
+			return FunCallExpr([ret, postfix])
+		return ret
+
+	def defs(self):
+		self.lexer.read()
+		fun_name = self.lexer.read()
+		assert(isinstance(fun_name, IdToken))
+		param_list = self.param_list()
+		block = self.block()
+
+		return DefExpr([fun_name, param_list, block])
+
+	def param_list(self):
+		assert(self.isToken(IdToken('(')))
+		self.lexer.read()
+
+		ret = self.params()
+
+		assert(self.isToken(IdToken(')')))
+		self.lexer.read()
+
+		return ret
+
+	def params(self):
+		tokens = [self.param()]
+
+		while self.isToken(IdToken(',')):
+			self.lexer.read()
+			tokens.append(self.param())
+
+		return tokens
+
+	def param(self):
+		token = self.lexer.read()
+		assert(isinstance(token, IdToken))
+		return token
 
 	def isToken(self, val):
 		return self.lexer.peek(0) == val

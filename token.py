@@ -40,7 +40,7 @@ class IdToken(Token):
 		super(IdToken, self).__init__(val)
 
 	def __str__(self):
-		return 'IdToken val : ' + str(self.val)
+		return str(self.val)
 
 	def __repr__(self):
 		return self.__str__()
