@@ -98,6 +98,32 @@ class NullExpr(ASTLeaf):
 		return None
 
 
+class Func(object):
+	def __init__(self, name, arglist, block, env):
+		super(Func, self).__init__()
+		self.name = name
+		self.arglist = arglist
+		self.block = block
+		self.env = env
+
+		assert(all(isinstance(val, IdToken) for val in self.arglist))
+
+	def __str__(self):
+		return "(Func : %s)" % self.name
+
+	def __repr__(self):
+		return self.__str__()
+
+	def eval(self, argvals):
+		assert(len(self.arglist) == len(argvals))
+		local_env = NestedEnvironment(self.env)
+
+		for name, val in zip(self.arglist, argvals):
+			local_env.set_new_val(name.val, val)
+
+		return self.block.eval(local_env)
+
+
 # 函数定义
 class DefExpr(ASTList):
 	def __init__(self, token_list):
