@@ -9,6 +9,8 @@ def get_true_value(token, env):
 		return token.val
 	elif isinstance(token, int) or isinstance(token, basestring):
 		return token
+	elif token is None:
+		return None
 	else:
 		raise Exception('cannot get true value : %s, env : %s' % (token, str(env)))
 

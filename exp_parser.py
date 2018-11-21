@@ -4,7 +4,13 @@ from token import EOLToken, NumToken, IdToken, StrToken
 
 '''
 param		: IDENTIFIER
+params		: param {"," param}
+param_list	: "(" [params] ")"
 primary		: "(" expr ")" | NUMBER | IDENTIFIER | STRING
+args		: expr {"," expr}
+postfix		: "(" [args] ")"
+primary		: ("(" expr ")" | NUMBER | IDENTIFIER | STRING ) {postfix}
+def     	: "def" IDENTIFIER param_list block
 factor		: "-" primary | primary
 expr 		: factor {OP factor}
 block		: "{" [statement] {(";" | EOL) [statement] } "}"
@@ -12,9 +18,8 @@ simple		: expr
 statement	: "if" expr block {"else" block}
 			| "while" expr block
 			| simple
-program		: [ statement ] (";" | EOL)
+program		: [def | statement] (";" | EOL)
 '''
-# TODO 使用算符优先算法来实现算符优先级
 
 
 class OP(object):

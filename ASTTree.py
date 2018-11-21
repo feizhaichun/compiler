@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 from token import Token, IdToken, get_true_value
+from environment import NestedEnvironment
 
 
 class ASTNode(object):
@@ -46,7 +47,7 @@ class ASTList(ASTNode):
 		ret = None
 		for token in self.token_list:
 			ret = token.eval(env)
-		return ret
+		return get_true_value(ret, env)
 
 
 # 双目操作符
@@ -102,12 +103,13 @@ class DefExpr(ASTList):
 	def __init__(self, token_list):
 		super(DefExpr, self).__init__(token_list)
 		assert(len(token_list) == 3)
+		assert(all(isinstance(val, IdToken) for val in token_list[1]))
 		self.fun_name = token_list[0]
 		self.param_list = token_list[1]
 		self.block = token_list[2]
 
 	def eval(self, env):
-		pass
+		env.set_val(self.fun_name.val, Func(self.fun_name, self.param_list, self.block, NestedEnvironment(env)))
 
 
 # 函数调用
@@ -117,6 +119,18 @@ class FunCallExpr(ASTList):
 		assert(len(token_list) == 2)
 		self.fun_name = token_list[0]
 		self.args = token_list[1]
+
+	def eval(self, env):
+		fun_name = self.fun_name.eval(env)
+		assert isinstance(fun_name, IdToken), type(fun_name)
+
+		fun_object = env.get_val(fun_name.val)
+		assert fun_object is not None, '%s is not in env' % fun_name.val
+		assert isinstance(fun_object, Func), type(fun_object)
+
+		# 计算参数
+		args = [get_true_value(val.eval(env), env) for val in self.args]
+		return fun_object.eval(args)
 
 
 # if

@@ -2,7 +2,7 @@
 from lexer import Lexer
 from token import NumToken, IdToken, StrToken, EOFToken, EOLToken
 from exp_parser import Parser
-from environment import BaseEnvironment
+from environment import NestedEnvironment
 import time
 
 
@@ -262,11 +262,62 @@ if __name__ == "__main__":
 			],
 		],
 
+		[
+			['''
+			def ttt(i) {
+				if i == 0 {
+					i
+				}
+				ttt(i - 1)
+			}
+			''', ],
+			[
+				'None', "ttt : (Func : ttt),"
+			]
+		],
+		[
+			['''
+			def ttt(i) {
+				if i > 0 {
+					ttt(i - 1)
+				}
+				i
+			}
+			j = ttt(10)
+			''', ],
+			[
+				'None', 'j : 10, ttt : (Func : ttt),'
+			]
+		],
+		[
+			['''
+			def fabi(i) {
+				if i < 2 {
+					i
+				} else {
+					fabi(i - 2) + fabi(i - 1)
+				}
+			}
+			j = fabi(10)
+			''', ],
+			[
+				'None', 'fabi : (Func : fabi), j : 55,'
+			]
+		],
+		[
+			['''
+			j = "abc" + "def"
+			''', ],
+			[
+				'None', 'j : abcdef,'
+			]
+		],
+
 	]
 
 	success, failed = 0, 0
 	for case, expect in test_cases:
-		env = BaseEnvironment()
+		env = NestedEnvironment(None)
 		ret = TestEval(Lexer(TestReader(case)), env).eval()
 		if str(ret) != expect[0] or str(env) != expect[1]:
 			print "input\t:\t%s" % case
