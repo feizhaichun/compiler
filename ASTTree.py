@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
-from token import Token, IdToken, get_true_value
-from environment import NestedEnvironment
+from token import Token, IdToken
+from environment import NestedEnvironment, ClassEnvironment
+from util import type_check
 
 
 class ASTNode(object):
@@ -17,6 +18,8 @@ class ASTNode(object):
 # 叶子节点，代表终结符
 class ASTLeaf(ASTNode):
 	def __init__(self, token):
+		type_check(token, Token)
+
 		super(ASTLeaf, self).__init__()
 		self.token = token
 
@@ -24,7 +27,7 @@ class ASTLeaf(ASTNode):
 		return str(self.token.val)
 
 	def eval(self, env):
-		return self.token
+		return self.token.val
 
 
 # 非叶子节点，代表非终结符
@@ -47,7 +50,7 @@ class ASTList(ASTNode):
 		ret = None
 		for token in self.token_list:
 			ret = token.eval(env)
-		return get_true_value(ret, env)
+		return ret
 
 
 # 双目操作符
@@ -60,19 +63,19 @@ class BinaryExpr(ASTList):
 
 		self.left, self.op, self.right = self.token_list
 
-	def eval(self, env):
-		left = self.left.eval(env)
-		right = self.right.eval(env)
-		op = self.op.val
+		type_check(self.op, OpExpr)
+		type_check(self.right, (ASTNode))
 
+	def eval(self, env):
+		op = self.op.eval(env)
 		# if为赋值操作，需要单独处理
 		if op == '=':
-			assert isinstance(left, IdToken)
-			env.set_val(left.val, get_true_value(right, env))
-			return env.get_val(left.val)
+			type_check(self.left, (IdExpr, DotExpr))
+			ret = self.left.set_val(self.right.eval(env), env)
+			return ret
 
-		left = get_true_value(left, env)
-		right = get_true_value(right, env)
+		left = self.left.eval(env)
+		right = self.right.eval(env)
 		if op == '<':
 			return left < right
 		elif op == '>':
@@ -105,7 +108,6 @@ class Func(object):
 		self.arglist = arglist
 		self.block = block
 		self.env = env
-
 		assert(all(isinstance(val, IdToken) for val in self.arglist))
 
 	def __str__(self):
@@ -114,14 +116,34 @@ class Func(object):
 	def __repr__(self):
 		return self.__str__()
 
-	def eval(self, argvals):
+	def eval(self, argvals, instance_info=None):
 		assert(len(self.arglist) == len(argvals))
 		local_env = NestedEnvironment(self.env)
 
+		# 如果instance_info不为None，说明是方法，需要一个指向对象的this指针
+		if instance_info is not None:
+			local_env.set_new_val('this', instance_info)
+
 		for name, val in zip(self.arglist, argvals):
 			local_env.set_new_val(name.val, val)
-
 		return self.block.eval(local_env)
+
+
+# 方法
+class Method(object):
+	def __init__(self, func, this):
+		super(Method, self).__init__()
+		self.this = this
+		self.func = func
+
+	def __str__(self):
+		return "(Method : %s)" % self.name
+
+	def __repr__(self):
+		return self.__str__()
+
+	def eval(self, argvals):
+		return self.func.eval(argvals, self.this)
 
 
 # 函数定义
@@ -130,33 +152,144 @@ class DefExpr(ASTList):
 		super(DefExpr, self).__init__(token_list)
 		assert(len(token_list) == 3)
 		assert(all(isinstance(val, IdToken) for val in token_list[1]))
+
 		self.fun_name = token_list[0]
 		self.param_list = token_list[1]
 		self.block = token_list[2]
 
+		type_check(self.fun_name, IdExpr)
+
 	def eval(self, env):
-		env.set_val(self.fun_name.val, Func(self.fun_name, self.param_list, self.block, NestedEnvironment(env)))
+		return env.set_val(self.fun_name.get_name(), Func(self.fun_name, self.param_list, self.block, env))
 
 
 # 函数调用
 class FunCallExpr(ASTList):
+	def __init__(self, token):
+		super(FunCallExpr, self).__init__(token)
+
+		self.args = token
+
+	def eval(self, env, instance_info=None):
+		raise NotImplementedError()
+
+	def calc_params(self, env):
+		return [val.eval(env) for val in self.args]
+
+
+# 类型
+class ClassInfo(object):
+	def __init__(self, name, local_env):
+		super(ClassInfo, self).__init__()
+		self.local_env = local_env
+		self.name = name
+
+	def __str__(self):
+		return "(class : %s, local_env : %s)" % (self.name, self.local_env)
+
+	def set_val(self, name, val):
+		self.local_env.set_val(name, val)
+
+	def get_val(self, name):
+		return self.local_env.get_val(name)
+
+
+# 对象
+class InstanceInfo(object):
+	def __init__(self, class_info, env):
+		super(InstanceInfo, self).__init__()
+		self.name = class_info.name
+		self.local_env = ClassEnvironment(class_info.local_env)
+
+		# 寻找初始化函数
+		constructor = self.local_env.get_val(self.name)
+		type_check(constructor, (Func, type(None)))
+		if constructor is not None:
+			constructor.eval([], self)		# 暂时不支持多参数构造函数
+
+	def __str__(self):
+		return '(%s [class_name : %s, local_env : %s, ])' % ('InstanceInfo', self.name, self.local_env)
+
+	def __repr__(self):
+		return self.__str__()
+
+	def set_val(self, name, val):
+		self.local_env.set_val(name, val)
+
+	def get_val(self, name):
+		ret = self.local_env.get_val(name)
+
+		# 在对象中找到的方法需要与对象绑定
+		if isinstance(ret, Func):
+			return Method(ret, self)
+
+		return ret
+
+
+# 类的定义表达式
+class ClassDefExpr(ASTList):
 	def __init__(self, token_list):
-		super(FunCallExpr, self).__init__(token_list)
-		assert(len(token_list) == 2)
-		self.fun_name = token_list[0]
-		self.args = token_list[1]
+		super(ClassDefExpr, self).__init__(token_list)
+		assert len(token_list) == 3, token_list
+
+		type_check(token_list[0], IdExpr)
+		self.name = token_list[0].get_name()
+
+		self.father_name = token_list[1]
+		self.members = token_list[2]
 
 	def eval(self, env):
-		fun_name = self.fun_name.eval(env)
-		assert isinstance(fun_name, IdToken), type(fun_name)
+		father_env = None
+		if self.father_name is not None:
+			father_class = env.get_val(self.father_name)
+			assert father_class is not None, 'class : %s cannot find his father : %s' % (self.name, self.father_name)
+			father_env = father_class.local_env
 
-		fun_object = env.get_val(fun_name.val)
-		assert fun_object is not None, '%s is not in env' % fun_name.val
-		assert isinstance(fun_object, Func), type(fun_object)
+		local_env = ClassEnvironment(father_env)
 
-		# 计算参数
-		args = [get_true_value(val.eval(env), env) for val in self.args]
-		return fun_object.eval(args)
+		for member in self.members:
+			if isinstance(member, DefExpr):
+				member.eval(local_env)
+			else:
+				member.eval(local_env)
+
+		env.set_new_val(self.name, ClassInfo(self.name, local_env))
+
+
+# 方法访问
+class DotExpr(ASTList):
+	def __init__(self, token_list):
+		super(DotExpr, self).__init__(token_list)
+
+	def set_val(self, val, env):
+
+		assert not isinstance(self.token_list[-1], FunCallExpr), 'cannot assign to a Function call'
+		class_info = self._get_val(env, self.token_list[:-1])
+
+		type_check(class_info, (ClassInfo, InstanceInfo, NestedEnvironment))
+		class_info.set_val(self.token_list[-1].get_name(), val)
+		return val
+
+	def _get_val(self, env, exprs):
+		cur_env = env
+
+		for expr in exprs:
+
+			# 如果是函数调用
+			if isinstance(expr, FunCallExpr):
+				args = expr.calc_params(env)
+				fun_ob = cur_env
+
+				if isinstance(fun_ob, (Func, Method)):
+					cur_env = fun_ob.eval(args)
+				else:
+					cur_env = InstanceInfo(fun_ob, env)
+			else:
+				cur_env = expr.eval(cur_env)
+		return cur_env
+
+	def eval(self, env):
+		return self._get_val(env, self.token_list)
 
 
 # if
@@ -171,7 +304,7 @@ class IfExpr(ASTList):
 		self.elseblock = token_list[2] if len(token_list) == 3 else None
 
 	def eval(self, env):
-		if get_true_value(self.condition.eval(env), env):
+		if self.condition.eval(env):
 			return self.block.eval(env)
 		elif self.elseblock:
 			return self.elseblock.eval(env)
@@ -189,18 +322,20 @@ class WhileExpr(ASTList):
 		self.block = token_list[1]
 
 	def eval(self, env):
-		while get_true_value(self.condition.eval(env), env):
+		while self.condition.eval(env):
 			ret = self.block.eval(env)
 		return ret
 
 
 # -
-class NegExpr(ASTLeaf):
-	def __init__(self, token_list):
-		super(NegExpr, self).__init__(token_list)
+class NegExpr(ASTList):
+	def __init__(self, exprs):
+		super(NegExpr, self).__init__(exprs)
+
+		assert len(exprs) == 1
 
 	def eval(self, env):
-		val = get_true_value(self.token.eval(env), env)
+		val = self.token_list[0].eval(env)
 		if not isinstance(val, int):
 			raise Exception("cannot negetive %s" % val)
 		return -val
@@ -215,7 +350,18 @@ class BlockExpr(ASTList):
 # id
 class IdExpr(ASTLeaf):
 	def __init__(self, token):
+		type_check(token, IdToken)
+
 		super(IdExpr, self).__init__(token)
+
+	def eval(self, env):
+		return env.get_val(self.token.val)
+
+	def set_val(self, val, env):
+		return env.set_val(self.token.val, val)
+
+	def get_name(self):
+		return self.token.val
 
 
 # num
@@ -226,5 +372,11 @@ class NumExpr(ASTLeaf):
 
 # str
 class StrExpr(ASTLeaf):
-		def __init__(self, token):
-			super(StrExpr, self).__init__(token)
+	def __init__(self, token):
+		super(StrExpr, self).__init__(token)
+
+
+# op
+class OpExpr(ASTLeaf):
+	def __init__(self, token):
+		super(OpExpr, self).__init__(token)
