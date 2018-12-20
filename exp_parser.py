@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 from ASTTree import BinaryExpr, IfExpr, WhileExpr, BlockExpr, NullExpr, NegExpr, NumExpr, IdExpr, StrExpr, DefExpr, FunCallExpr, ClassDefExpr, DotExpr, OpExpr
+from ASTTree import ArrayGetItemExpr, ArrayDefExpr
 from token import EOLToken, NumToken, IdToken, StrToken
 
 '''
@@ -10,8 +11,8 @@ defclass	: "class" IDENTIFIER ["extends" IDENTIFIER] class_body
 params		: param {"," param}
 param_list	: "(" [params] ")"
 args		: expr {"," expr}
-postfix		: "(" [args] ")" | "." IDENTIFIER
-primary		: ("(" expr ")" | NUMBER | IDENTIFIER | STRING ) {postfix}
+postfix		: "(" [args] ")" | "." IDENTIFIER | "[" expr "]"
+primary		: ("(" expr ")" | "[" args "]" | NUMBER | IDENTIFIER | STRING ) {postfix}
 def     	: "def" IDENTIFIER param_list block
 factor		: "-" primary | primary
 expr 		: factor {OP factor}
@@ -197,6 +198,11 @@ class Parser(object):
 			ret = self.args()
 			self.absorb_or_assert(IdToken(')'))
 			return ret
+		elif self.isToken(IdToken('[')):
+			self.absorb_or_assert(IdToken('['))
+			ret = ArrayGetItemExpr(self.expr())
+			self.absorb_or_assert(IdToken(']'))
+			return ret
 		else:
 			self.absorb_or_assert(IdToken('.'))
 			return IdExpr(self.lexer.read())
@@ -211,9 +217,13 @@ class Parser(object):
 		exprs = []
 
 		if self.isToken(IdToken('(')):
-			self.lexer.read()
+			self.absorb_or_assert(IdToken('('))
 			exprs.append(self.expr())
 			self.absorb_or_assert(IdToken(')'))
+		elif self.isToken(IdToken('[')):
+			self.absorb_or_assert(IdToken('['))
+			exprs.append(ArrayDefExpr(self.args()))
+			self.absorb_or_assert(IdToken(']'))
 		else:
 			token = self.lexer.read()
 			if isinstance(token, NumToken):
@@ -226,7 +236,7 @@ class Parser(object):
 			else:
 				raise Exception('cannot find type of token : %s' % token)
 
-		while self.isToken(IdToken('('), IdToken('.')):
+		while self.isToken(IdToken('('), IdToken('.'), IdToken('[')):
 			if self.isToken(IdToken('(')):
 				exprs.append(FunCallExpr(self.postfix()))
 			else:

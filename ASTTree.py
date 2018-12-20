@@ -177,6 +177,44 @@ class FunCallExpr(ASTList):
 		return [val.eval(env) for val in self.args]
 
 
+# 数组
+class ArrayInfo(object):
+	def __init__(self, array):
+		super(ArrayInfo, self).__init__()
+		self.array = array
+
+	def get_item(self, index):
+		type_check(index, (int))
+
+		return self.array[index]
+
+	def set_val(self, index, val):
+		type_check(index, (int))
+
+		self.array[index] = val
+		return self.array[index]
+
+	def __str__(self):
+		return str(self.array)
+
+
+# 数组定义
+class ArrayDefExpr(ASTList):
+	def __init__(self, token_list):
+		super(ArrayDefExpr, self).__init__(token_list)
+		self.elements = token_list
+
+	def eval(self, env):
+		elements = [element.eval(env) for element in self.elements]
+		return ArrayInfo(elements)
+
+
+# 数组取值
+class ArrayGetItemExpr(ASTList):
+	def __init__(self, token):
+		super(ArrayGetItemExpr, self).__init__([token])
+
+
 # 类型
 class ClassInfo(object):
 	def __init__(self, name, local_env):
@@ -266,10 +304,16 @@ class DotExpr(ASTList):
 		assert not isinstance(self.token_list[-1], FunCallExpr), 'cannot assign to a Function call'
 		class_info = self._get_val(env, self.token_list[:-1])
 
-		type_check(class_info, (ClassInfo, InstanceInfo, NestedEnvironment))
-		class_info.set_val(self.token_list[-1].get_name(), val)
+		type_check(class_info, (ClassInfo, InstanceInfo, NestedEnvironment, ArrayInfo))
+
+		if isinstance(self.token_list[-1], IdExpr):
+			class_info.set_val(self.token_list[-1].get_name(), val)
+		else:
+			class_info.set_val(self.token_list[-1].eval(env), val)
+
 		return val
 
+	# 获取exprs代表的环境
 	def _get_val(self, env, exprs):
 		cur_env = env
 
@@ -284,6 +328,10 @@ class DotExpr(ASTList):
 					cur_env = fun_ob.eval(args)
 				else:
 					cur_env = InstanceInfo(fun_ob, env)
+			elif isinstance(expr, ArrayGetItemExpr):
+				type_check(cur_env, ArrayInfo)
+				index = expr.eval(env)
+				cur_env = cur_env.get_item(index)
 			else:
 				cur_env = expr.eval(cur_env)
 		return cur_env
