@@ -35,7 +35,9 @@ class TestEval(object):
 		ret = None
 
 		while self.lexer.peek(0) != EOFToken():
-			ret = Parser(self.lexer).program().eval(self.env)
+			program = Parser(self.lexer).program()
+			program.lookup(self.env)
+			ret = program.eval(self.env)
 
 		return ret
 
@@ -338,6 +340,21 @@ if __name__ == "__main__":
 			[
 				['''
 				def ttt(i) {
+					if i == 0 {
+						i
+					} else {
+						i + 1
+					}
+				}
+				a = ttt(10)
+				''', ],
+				[
+					'None', "a : 11, ttt : (Func : ttt),"
+				]
+			],
+			[
+				['''
+				def ttt(i) {
 					if i > 0 {
 						ttt(i - 1)
 					}
@@ -376,8 +393,8 @@ if __name__ == "__main__":
 				['''
 				def outer(i) {
 					def inner() {
-						i = i - 1
-						i
+						j = i - 1
+						j
 					}
 					inner
 				}
@@ -386,7 +403,7 @@ if __name__ == "__main__":
 				j = f()
 				''', ],
 				[
-					'None', 'f : (Func : inner), j : 3, k : 4, outer : (Func : outer),'
+					'None', 'f : (Func : inner), j : 4, k : 4, outer : (Func : outer),'
 				]
 			],
 			[

@@ -277,7 +277,7 @@ class Parser(object):
 	def param(self):
 		token = self.lexer.read()
 		assert(isinstance(token, IdToken))
-		return token
+		return IdExpr(token)
 
 	def member(self):
 		if self.isToken(IdToken('def')):
@@ -309,7 +309,7 @@ class Parser(object):
 			father_class_name = self.lexer.read()
 			assert isinstance(father_class_name), IdToken
 
-		class_body = self.class_body()
+		class_body = BlockExpr(self.class_body())
 
 		return ClassDefExpr([class_name, father_class_name, class_body])
 

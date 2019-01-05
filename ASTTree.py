@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 from token import Token, IdToken
-from environment import NestedEnvironment, ClassEnvironment
+from environment import NestedEnvironment, ClassEnvironment, FunEnvironment
 from util import type_check
 
 
@@ -13,6 +13,9 @@ class ASTNode(object):
 
 	def __repr__(self):
 		return self.__str__()
+
+	def lookup(self, env):
+		pass
 
 
 # 叶子节点，代表终结符
@@ -50,6 +53,14 @@ class ASTList(ASTNode):
 		ret = None
 		for token in self.token_list:
 			ret = token.eval(env)
+		return ret
+
+	def lookup(self, env):
+		ret = None
+		for token in self.token_list:
+			if isinstance(token, ASTNode):
+				ret = token.lookup(env)
+
 		return ret
 
 
@@ -91,6 +102,15 @@ class BinaryExpr(ASTList):
 		else:
 			raise Exception('has not implement op : %s' % op)
 
+	def lookup(self, env):
+		op = self.op.eval(env)
+
+		if op == '=' and isinstance(self.left, (IdExpr, DotExpr)) and isinstance(env, FunEnvironment):
+			self.left.assign_indexs(env)
+		else:
+			self.left.lookup(env)
+		self.right.lookup(env)
+
 
 # 空语句
 class NullExpr(ASTLeaf):
@@ -102,13 +122,14 @@ class NullExpr(ASTLeaf):
 
 
 class Func(object):
-	def __init__(self, name, arglist, block, env):
+	def __init__(self, name, arglist, block, env, local_size):
 		super(Func, self).__init__()
 		self.name = name
 		self.arglist = arglist
 		self.block = block
 		self.env = env
-		assert(all(isinstance(val, IdToken) for val in self.arglist))
+		self.local_size = local_size
+		assert(all(isinstance(val, IdExpr) for val in self.arglist))
 
 	def __str__(self):
 		return "(Func : %s)" % self.name
@@ -118,14 +139,15 @@ class Func(object):
 
 	def eval(self, argvals, instance_info=None):
 		assert(len(self.arglist) == len(argvals))
-		local_env = NestedEnvironment(self.env)
+		local_env = FunEnvironment(self.env, self.local_size)
 
-		# 如果instance_info不为None，说明是方法，需要一个指向对象的this指针
+		# 如果instance_info不为None，说明是方法，需要一个指向对象的this指针, 一定是第一个位置
 		if instance_info is not None:
-			local_env.set_new_val('this', instance_info)
+			local_env.set_local(0, 0, instance_info)
 
 		for name, val in zip(self.arglist, argvals):
-			local_env.set_new_val(name.val, val)
+			local_env.set_local(name.index, 0, val)
+
 		return self.block.eval(local_env)
 
 
@@ -151,16 +173,36 @@ class DefExpr(ASTList):
 	def __init__(self, token_list):
 		super(DefExpr, self).__init__(token_list)
 		assert(len(token_list) == 3)
-		assert(all(isinstance(val, IdToken) for val in token_list[1]))
+		assert(all(isinstance(val, IdExpr) for val in token_list[1]))
 
 		self.fun_name = token_list[0]
 		self.param_list = token_list[1]
 		self.block = token_list[2]
+		self.local_size = 0
 
 		type_check(self.fun_name, IdExpr)
 
 	def eval(self, env):
-		return env.set_val(self.fun_name.get_name(), Func(self.fun_name, self.param_list, self.block, env))
+		return self.fun_name.set_val(Func(self.fun_name, self.param_list, self.block, env, self.local_size), env)
+
+	def lookup(self, env):
+		# 函数名称
+		if isinstance(env, FunEnvironment):
+			self.fun_name.assign_indexs(env)
+
+		local_env = FunEnvironment(env)
+
+		# 对象的方法，需要分配一个this空间
+		if isinstance(env, ClassEnvironment):
+			local_env.set_new_val('this')
+
+		for expr in self.param_list:
+			expr.assign_indexs(local_env)
+			assert expr.index != -1
+
+		self.block.lookup(local_env)
+
+		self.local_size = local_env.get_local_size()
 
 
 # 函数调用
@@ -240,8 +282,12 @@ class InstanceInfo(object):
 		self.local_env = ClassEnvironment(class_info.local_env)
 
 		# 寻找初始化函数
-		constructor = self.local_env.get_val(self.name)
-		type_check(constructor, (Func, type(None)))
+		try:
+			constructor = self.local_env.get_val(self.name)
+		except NameError:
+			return
+
+		type_check(constructor, (Func))
 		if constructor is not None:
 			constructor.eval([], self)		# 暂时不支持多参数构造函数
 
@@ -285,13 +331,20 @@ class ClassDefExpr(ASTList):
 
 		local_env = ClassEnvironment(father_env)
 
-		for member in self.members:
-			if isinstance(member, DefExpr):
-				member.eval(local_env)
-			else:
-				member.eval(local_env)
+		self.members.eval(local_env)
 
 		env.set_new_val(self.name, ClassInfo(self.name, local_env))
+
+	def lookup(self, env):
+		father_env = None
+		if self.father_name is not None:
+			father_class = env.get_val(self.father_name)
+			assert father_class is not None, 'class : %s cannot find his father : %s' % (self.name, self.father_name)
+			father_env = father_class.local_env
+
+		local_env = ClassEnvironment(father_env)
+
+		self.members.lookup(local_env)
 
 
 # 方法访问
@@ -307,8 +360,9 @@ class DotExpr(ASTList):
 		type_check(class_info, (ClassInfo, InstanceInfo, NestedEnvironment, ArrayInfo))
 
 		if isinstance(self.token_list[-1], IdExpr):
-			class_info.set_val(self.token_list[-1].get_name(), val)
+			self.token_list[-1].set_val(val, class_info)
 		else:
+			print type(class_info)
 			class_info.set_val(self.token_list[-1].eval(env), val)
 
 		return val
@@ -401,15 +455,40 @@ class IdExpr(ASTLeaf):
 		type_check(token, IdToken)
 
 		super(IdExpr, self).__init__(token)
+		self.index = -1
+		self.nested_level = -1
 
 	def eval(self, env):
+		if self.index != -1:
+			type_check(env, (FunEnvironment))
+			return env.get_local(self.index, self.nested_level)
 		return env.get_val(self.token.val)
 
 	def set_val(self, val, env):
+		if self.index != -1:
+			type_check(env, (FunEnvironment))
+			return env.set_local(self.index, self.nested_level, val)
+
 		return env.set_val(self.token.val, val)
 
 	def get_name(self):
 		return self.token.val
+
+	def lookup(self, env):
+		if not isinstance(env, FunEnvironment):
+			return
+
+		if self.index != -1:
+			return self.index, self.nested_level
+
+		self.index, self.nested_level = env.lookup(self.get_name())
+
+	def assign_indexs(self, env):
+
+		if not isinstance(env, FunEnvironment):
+			return
+
+		self.index, self.nested_level = env.set_new_val(self.get_name())
 
 
 # num
