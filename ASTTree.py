@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 from token import Token, IdToken
 from environment import NestedEnvironment, ClassEnvironment, FunEnvironment
+from objects import ArrayInfo, Func, Method, ClassInfo, InstanceInfo
 from util import type_check
 
 
@@ -35,13 +36,13 @@ class ASTLeaf(ASTNode):
 
 # 非叶子节点，代表非终结符
 class ASTList(ASTNode):
-	def __init__(self, token_list):
+	def __init__(self, astnode_list):
 		super(ASTList, self).__init__()
-		self.token_list = token_list
+		self.astnode_list = astnode_list
 
 	def __str__(self):
 		ret = ['(']
-		for element in self.token_list:
+		for element in self.astnode_list:
 			if isinstance(element, Token):
 				ret.append(str(element.val))
 			else:
@@ -51,13 +52,13 @@ class ASTList(ASTNode):
 
 	def eval(self, env):
 		ret = None
-		for token in self.token_list:
+		for token in self.astnode_list:
 			ret = token.eval(env)
 		return ret
 
 	def lookup(self, env):
 		ret = None
-		for token in self.token_list:
+		for token in self.astnode_list:
 			if isinstance(token, ASTNode):
 				ret = token.lookup(env)
 
@@ -66,13 +67,13 @@ class ASTList(ASTNode):
 
 # 双目操作符
 class BinaryExpr(ASTList):
-	def __init__(self, token_list):
-		super(BinaryExpr, self).__init__(token_list)
+	def __init__(self, astnode_list):
+		super(BinaryExpr, self).__init__(astnode_list)
 
-		if len(token_list) != 3:
-			raise Exception("len(token_list) in BinaryExpr must be 3 : %s", token_list)
+		if len(astnode_list) != 3:
+			raise Exception("len(astnode_list) in BinaryExpr must be 3 : %s", astnode_list)
 
-		self.left, self.op, self.right = self.token_list
+		self.left, self.op, self.right = self.astnode_list
 
 		type_check(self.op, OpExpr)
 		type_check(self.right, (ASTNode))
@@ -121,66 +122,21 @@ class NullExpr(ASTLeaf):
 		return None
 
 
-class Func(object):
-	def __init__(self, name, arglist, block, env, local_size):
-		super(Func, self).__init__()
-		self.name = name
-		self.arglist = arglist
-		self.block = block
-		self.env = env
-		self.local_size = local_size
-		assert(all(isinstance(val, IdExpr) for val in self.arglist))
-
-	def __str__(self):
-		return "(Func : %s)" % self.name
-
-	def __repr__(self):
-		return self.__str__()
-
-	def eval(self, argvals, instance_info=None):
-		assert(len(self.arglist) == len(argvals))
-		local_env = FunEnvironment(self.env, self.local_size)
-
-		# 如果instance_info不为None，说明是方法，需要一个指向对象的this指针, 一定是第一个位置
-		if instance_info is not None:
-			local_env.set_local(0, 0, instance_info)
-
-		for name, val in zip(self.arglist, argvals):
-			local_env.set_local(name.index, 0, val)
-
-		return self.block.eval(local_env)
-
-
-# 方法
-class Method(object):
-	def __init__(self, func, this):
-		super(Method, self).__init__()
-		self.this = this
-		self.func = func
-
-	def __str__(self):
-		return "(Method : %s)" % self.name
-
-	def __repr__(self):
-		return self.__str__()
-
-	def eval(self, argvals):
-		return self.func.eval(argvals, self.this)
-
-
 # 函数定义
 class DefExpr(ASTList):
-	def __init__(self, token_list):
-		super(DefExpr, self).__init__(token_list)
-		assert(len(token_list) == 3)
-		assert(all(isinstance(val, IdExpr) for val in token_list[1]))
+	def __init__(self, astnode_list):
+		super(DefExpr, self).__init__(astnode_list)
+		assert(len(astnode_list) == 3)
 
-		self.fun_name = token_list[0]
-		self.param_list = token_list[1]
-		self.block = token_list[2]
+		self.fun_name = astnode_list[0]
+		self.param_list = astnode_list[1]
+		self.block = astnode_list[2]
 		self.local_size = 0
 
 		type_check(self.fun_name, IdExpr)
+		type_check(self.param_list, list)
+		type_check(self.block, BlockExpr)
+		assert(all(isinstance(val, IdExpr) for val in self.param_list))
 
 	def eval(self, env):
 		return self.fun_name.set_val(Func(self.fun_name, self.param_list, self.block, env, self.local_size), env)
@@ -219,32 +175,11 @@ class FunCallExpr(ASTList):
 		return [val.eval(env) for val in self.args]
 
 
-# 数组
-class ArrayInfo(object):
-	def __init__(self, array):
-		super(ArrayInfo, self).__init__()
-		self.array = array
-
-	def get_item(self, index):
-		type_check(index, (int))
-
-		return self.array[index]
-
-	def set_val(self, index, val):
-		type_check(index, (int))
-
-		self.array[index] = val
-		return self.array[index]
-
-	def __str__(self):
-		return str(self.array)
-
-
 # 数组定义
 class ArrayDefExpr(ASTList):
-	def __init__(self, token_list):
-		super(ArrayDefExpr, self).__init__(token_list)
-		self.elements = token_list
+	def __init__(self, astnode_list):
+		super(ArrayDefExpr, self).__init__(astnode_list)
+		self.elements = astnode_list
 
 	def eval(self, env):
 		elements = [element.eval(env) for element in self.elements]
@@ -257,70 +192,17 @@ class ArrayGetItemExpr(ASTList):
 		super(ArrayGetItemExpr, self).__init__([token])
 
 
-# 类型
-class ClassInfo(object):
-	def __init__(self, name, local_env):
-		super(ClassInfo, self).__init__()
-		self.local_env = local_env
-		self.name = name
-
-	def __str__(self):
-		return "(class : %s, local_env : %s)" % (self.name, self.local_env)
-
-	def set_val(self, name, val):
-		self.local_env.set_val(name, val)
-
-	def get_val(self, name):
-		return self.local_env.get_val(name)
-
-
-# 对象
-class InstanceInfo(object):
-	def __init__(self, class_info, env):
-		super(InstanceInfo, self).__init__()
-		self.name = class_info.name
-		self.local_env = ClassEnvironment(class_info.local_env)
-
-		# 寻找初始化函数
-		try:
-			constructor = self.local_env.get_val(self.name)
-		except NameError:
-			return
-
-		type_check(constructor, (Func))
-		if constructor is not None:
-			constructor.eval([], self)		# 暂时不支持多参数构造函数
-
-	def __str__(self):
-		return '(%s [class_name : %s, local_env : %s, ])' % ('InstanceInfo', self.name, self.local_env)
-
-	def __repr__(self):
-		return self.__str__()
-
-	def set_val(self, name, val):
-		self.local_env.set_val(name, val)
-
-	def get_val(self, name):
-		ret = self.local_env.get_val(name)
-
-		# 在对象中找到的方法需要与对象绑定
-		if isinstance(ret, Func):
-			return Method(ret, self)
-
-		return ret
-
-
 # 类的定义表达式
 class ClassDefExpr(ASTList):
-	def __init__(self, token_list):
-		super(ClassDefExpr, self).__init__(token_list)
-		assert len(token_list) == 3, token_list
+	def __init__(self, astnode_list):
+		super(ClassDefExpr, self).__init__(astnode_list)
+		assert len(astnode_list) == 3, astnode_list
 
-		type_check(token_list[0], IdExpr)
-		self.name = token_list[0].get_name()
+		type_check(astnode_list[0], IdExpr)
+		self.name = astnode_list[0].get_name()
 
-		self.father_name = token_list[1]
-		self.members = token_list[2]
+		self.father_name = astnode_list[1]
+		self.members = astnode_list[2]
 
 	def eval(self, env):
 		father_env = None
@@ -349,21 +231,20 @@ class ClassDefExpr(ASTList):
 
 # 方法访问
 class DotExpr(ASTList):
-	def __init__(self, token_list):
-		super(DotExpr, self).__init__(token_list)
+	def __init__(self, astnode_list):
+		super(DotExpr, self).__init__(astnode_list)
 
 	def set_val(self, val, env):
 
-		assert not isinstance(self.token_list[-1], FunCallExpr), 'cannot assign to a Function call'
-		class_info = self._get_val(env, self.token_list[:-1])
+		assert not isinstance(self.astnode_list[-1], FunCallExpr), 'cannot assign to a Function call'
+		class_info = self._get_val(env, self.astnode_list[:-1])
 
 		type_check(class_info, (ClassInfo, InstanceInfo, NestedEnvironment, ArrayInfo))
 
-		if isinstance(self.token_list[-1], IdExpr):
-			self.token_list[-1].set_val(val, class_info)
+		if isinstance(self.astnode_list[-1], IdExpr):
+			self.astnode_list[-1].set_val(val, class_info)
 		else:
-			print type(class_info)
-			class_info.set_val(self.token_list[-1].eval(env), val)
+			class_info.set_val(self.astnode_list[-1].eval(env), val)
 
 		return val
 
@@ -378,10 +259,39 @@ class DotExpr(ASTList):
 				args = expr.calc_params(env)
 				fun_ob = cur_env
 
-				if isinstance(fun_ob, (Func, Method)):
-					cur_env = fun_ob.eval(args)
-				else:
-					cur_env = InstanceInfo(fun_ob, env)
+				if isinstance(fun_ob, (Func, Method)):				# 函数调用
+
+					# 内部空间
+					if isinstance(fun_ob, Method):
+						instance_info = fun_ob.this
+						fun_ob = fun_ob.func
+						local_env = FunEnvironment(fun_ob.env, fun_ob.local_size, instance_info)
+					else:
+						local_env = FunEnvironment(fun_ob.env, fun_ob.local_size, None)
+
+					# 参数
+					for name, val in zip(fun_ob.arglist, args):
+						local_env.set_local(name.index, 0, val)
+
+					# 执行函数
+					cur_env = fun_ob.block.eval(local_env)
+				else:												# 构造函数调用
+					class_info = fun_ob
+
+					# 创建对象
+					instance_info = InstanceInfo(class_info.name, ClassEnvironment(class_info.local_env))
+
+					# 执行初始化函数,暂时不支持带参的构造函数
+					try:
+						constructor = class_info.local_env.get_val(class_info.name)
+						type_check(constructor, (Func))
+						local_env = FunEnvironment(constructor.env, constructor.local_size, instance_info)
+						constructor.block.eval(local_env)
+					except NameError:
+						pass
+
+					cur_env = instance_info
+
 			elif isinstance(expr, ArrayGetItemExpr):
 				type_check(cur_env, ArrayInfo)
 				index = expr.eval(env)
@@ -391,19 +301,31 @@ class DotExpr(ASTList):
 		return cur_env
 
 	def eval(self, env):
-		return self._get_val(env, self.token_list)
+		return self._get_val(env, self.astnode_list)
+
+	def lookup(self, env):
+		for expr in self.astnode_list:
+			expr.lookup(env)
+
+	def assign_indexs(self, env):
+		expr = self.astnode_list[0]
+
+		if not isinstance(expr, IdExpr):
+			return
+
+		expr.assign_indexs(env)
 
 
 # if
 class IfExpr(ASTList):
-	def __init__(self, token_list):
-		if len(token_list) != 2 and len(token_list) != 3:
-			raise Exception("len(token_list) in if should be 2 or 3 : %s", token_list)
-		super(IfExpr, self).__init__(token_list)
+	def __init__(self, astnode_list):
+		if len(astnode_list) != 2 and len(astnode_list) != 3:
+			raise Exception("len(astnode_list) in if should be 2 or 3 : %s", astnode_list)
+		super(IfExpr, self).__init__(astnode_list)
 
-		self.condition = token_list[0]
-		self.block = token_list[1]
-		self.elseblock = token_list[2] if len(token_list) == 3 else None
+		self.condition = astnode_list[0]
+		self.block = astnode_list[1]
+		self.elseblock = astnode_list[2] if len(astnode_list) == 3 else None
 
 	def eval(self, env):
 		if self.condition.eval(env):
@@ -415,13 +337,13 @@ class IfExpr(ASTList):
 
 # while
 class WhileExpr(ASTList):
-	def __init__(self, token_list):
-		if len(token_list) != 2:
-			raise Exception("len(token_list) in if should be 2 or 3 : %s", token_list)
-		super(WhileExpr, self).__init__(token_list)
+	def __init__(self, astnode_list):
+		if len(astnode_list) != 2:
+			raise Exception("len(astnode_list) in if should be 2 or 3 : %s", astnode_list)
+		super(WhileExpr, self).__init__(astnode_list)
 
-		self.condition = token_list[0]
-		self.block = token_list[1]
+		self.condition = astnode_list[0]
+		self.block = astnode_list[1]
 
 	def eval(self, env):
 		while self.condition.eval(env):
@@ -437,7 +359,7 @@ class NegExpr(ASTList):
 		assert len(exprs) == 1
 
 	def eval(self, env):
-		val = self.token_list[0].eval(env)
+		val = self.astnode_list[0].eval(env)
 		if not isinstance(val, int):
 			raise Exception("cannot negetive %s" % val)
 		return -val
@@ -445,8 +367,8 @@ class NegExpr(ASTList):
 
 # block
 class BlockExpr(ASTList):
-	def __init__(self, token_list):
-		super(BlockExpr, self).__init__(token_list)
+	def __init__(self, astnode_list):
+		super(BlockExpr, self).__init__(astnode_list)
 
 
 # id

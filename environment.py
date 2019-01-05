@@ -65,10 +65,14 @@ class ClassEnvironment(NestedEnvironment):
 
 # 函数对象空间，所有的局部变量访问都通过index
 class FunEnvironment(NestedEnvironment):
-	def __init__(self, outer=None, size=0):
+	def __init__(self, outer=None, size=0, instance_info=None):
 		super(FunEnvironment, self).__init__(outer)
 		self.name2index = {}
 		self.names = [None] * size
+
+		if instance_info is not None:
+			self.name2index['this'] = 0
+			self.names[0] = instance_info
 
 	def lookup(self, name):
 		if name in self.name2index:
@@ -79,6 +83,7 @@ class FunEnvironment(NestedEnvironment):
 		return -1, 0
 
 	def set_new_val(self, name, val=None):
+		# assert name != 'this'
 		if name not in self.name2index:
 			self.name2index[name] = len(self.names)
 			self.names.append(val)

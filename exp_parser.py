@@ -266,13 +266,13 @@ class Parser(object):
 		if self.isToken(IdToken(')')):
 			return []
 
-		tokens = [self.param()]
+		exprs = [self.param()]
 
 		while self.isToken(IdToken(',')):
 			self.lexer.read()
-			tokens.append(self.param())
+			exprs.append(self.param())
 
-		return tokens
+		return exprs
 
 	def param(self):
 		token = self.lexer.read()
@@ -295,7 +295,7 @@ class Parser(object):
 				members.append(self.member())
 
 		self.absorb_or_assert(IdToken('}'))
-		return members
+		return BlockExpr(members)
 
 	def classdef(self):
 		self.absorb_or_assert(IdToken('class'))
@@ -309,7 +309,7 @@ class Parser(object):
 			father_class_name = self.lexer.read()
 			assert isinstance(father_class_name), IdToken
 
-		class_body = BlockExpr(self.class_body())
+		class_body = self.class_body()
 
 		return ClassDefExpr([class_name, father_class_name, class_body])
 
