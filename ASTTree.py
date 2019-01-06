@@ -76,7 +76,6 @@ class BinaryExpr(ASTList):
 		self.left, self.op, self.right = self.astnode_list
 
 		type_check(self.op, OpExpr)
-		type_check(self.right, (ASTNode))
 
 	def eval(self, env):
 		op = self.op.eval(env)
@@ -139,7 +138,7 @@ class DefExpr(ASTList):
 		assert(all(isinstance(val, IdExpr) for val in self.param_list))
 
 	def eval(self, env):
-		return self.fun_name.set_val(Func(self.fun_name, self.param_list, self.block, env, self.local_size), env)
+		return self.fun_name.set_val(Func(self.fun_name.get_name(), self.param_list, self.block, env, self.local_size), env)
 
 	def lookup(self, env):
 		# 函数名称
@@ -171,9 +170,6 @@ class FunCallExpr(ASTList):
 	def eval(self, env, instance_info=None):
 		raise NotImplementedError()
 
-	def calc_params(self, env):
-		return [val.eval(env) for val in self.args]
-
 
 # 数组定义
 class ArrayDefExpr(ASTList):
@@ -199,8 +195,8 @@ class ClassDefExpr(ASTList):
 		assert len(astnode_list) == 3, astnode_list
 
 		type_check(astnode_list[0], IdExpr)
-		self.name = astnode_list[0].get_name()
 
+		self.name = astnode_list[0]
 		self.father_name = astnode_list[1]
 		self.members = astnode_list[2]
 
@@ -215,7 +211,7 @@ class ClassDefExpr(ASTList):
 
 		self.members.eval(local_env)
 
-		env.set_new_val(self.name, ClassInfo(self.name, local_env))
+		return self.name.set_val(ClassInfo(self.name.get_name(), local_env), env)
 
 	def lookup(self, env):
 		father_env = None
@@ -256,7 +252,9 @@ class DotExpr(ASTList):
 
 			# 如果是函数调用
 			if isinstance(expr, FunCallExpr):
-				args = expr.calc_params(env)
+				assert isinstance(cur_env, (Func, Method, ClassInfo)), '%s is not callable' % type(expr)
+
+				args = [val.eval(env) for val in expr.args]
 				fun_ob = cur_env
 
 				if isinstance(fun_ob, (Func, Method)):				# 函数调用
@@ -275,7 +273,7 @@ class DotExpr(ASTList):
 
 					# 执行函数
 					cur_env = fun_ob.block.eval(local_env)
-				else:												# 构造函数调用
+				else:											# 构造函数调用
 					class_info = fun_ob
 
 					# 创建对象
@@ -303,23 +301,15 @@ class DotExpr(ASTList):
 	def eval(self, env):
 		return self._get_val(env, self.astnode_list)
 
-	def lookup(self, env):
-		for expr in self.astnode_list:
-			expr.lookup(env)
-
 	def assign_indexs(self, env):
-		expr = self.astnode_list[0]
-
-		if not isinstance(expr, IdExpr):
-			return
-
-		expr.assign_indexs(env)
+		type_check(self.astnode_list[0], IdExpr)
+		self.astnode_list[0].assign_indexs(env)
 
 
 # if
 class IfExpr(ASTList):
 	def __init__(self, astnode_list):
-		if len(astnode_list) != 2 and len(astnode_list) != 3:
+		if len(astnode_list) not in (2, 3):
 			raise Exception("len(astnode_list) in if should be 2 or 3 : %s", astnode_list)
 		super(IfExpr, self).__init__(astnode_list)
 
@@ -380,18 +370,19 @@ class IdExpr(ASTLeaf):
 		self.index = -1
 		self.nested_level = -1
 
+	# 在命名空间中找到变量对应的值
 	def eval(self, env):
 		if self.index != -1:
 			type_check(env, (FunEnvironment))
 			return env.get_local(self.index, self.nested_level)
-		return env.get_val(self.token.val)
+		return env.get_val(self.get_name())
 
 	def set_val(self, val, env):
 		if self.index != -1:
 			type_check(env, (FunEnvironment))
 			return env.set_local(self.index, self.nested_level, val)
 
-		return env.set_val(self.token.val, val)
+		return env.set_val(self.get_name(), val)
 
 	def get_name(self):
 		return self.token.val
@@ -400,15 +391,12 @@ class IdExpr(ASTLeaf):
 		if not isinstance(env, FunEnvironment):
 			return
 
-		if self.index != -1:
-			return self.index, self.nested_level
+		assert self.index == -1
 
 		self.index, self.nested_level = env.lookup(self.get_name())
 
 	def assign_indexs(self, env):
-
-		if not isinstance(env, FunEnvironment):
-			return
+		assert isinstance(env, FunEnvironment)
 
 		self.index, self.nested_level = env.set_new_val(self.get_name())
 
