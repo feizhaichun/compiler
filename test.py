@@ -5,6 +5,7 @@ from exp_parser import Parser
 from environment import NestedEnvironment
 import time
 from util import print_exc_plus
+from ByteCode import ByteCode
 
 
 class TestReader(object):
@@ -35,9 +36,14 @@ class TestEval(object):
 		ret = None
 
 		while self.lexer.peek(0) != EOFToken():
+
+			env = NestedEnvironment(None)
 			program = Parser(self.lexer).program()
-			program.lookup(self.env)
-			ret = program.eval(self.env)
+			program.lookup(env)
+			opcodes = program.eval(env)
+			code = ByteCode(opcodes, env.get_consts())
+			print code.opcodes
+			ret = code.eval(self.env)
 
 		return ret
 
@@ -323,20 +329,6 @@ if __name__ == "__main__":
 					"None", 'a : 8, b : 5,',
 				],
 			],
-
-			[
-				['''
-				def ttt(i) {
-					if i == 0 {
-						i
-					}
-					ttt(i - 1)
-				}
-				''', ],
-				[
-					'None', "ttt : (Func : ttt),"
-				]
-			],
 			[
 				['''
 				def ttt(i) {
@@ -350,6 +342,20 @@ if __name__ == "__main__":
 				''', ],
 				[
 					'None', "a : 11, ttt : (Func : ttt),"
+				]
+			],
+
+			[
+				['''
+				def ttt(i) {
+					if i == 0 {
+						i
+					}
+					ttt(i - 1)
+				}
+				''', ],
+				[
+					'None', "ttt : (Func : ttt),"
 				]
 			],
 			[
@@ -410,7 +416,7 @@ if __name__ == "__main__":
 				['''
 				class Foo {
 					def a() {
-						x += 3
+						x = x + 3
 						x
 					}
 					def b(i) {
@@ -427,7 +433,7 @@ if __name__ == "__main__":
 				['''
 				class Foo {
 					def a() {
-						x += 3
+						x = x + 3
 						x
 					}
 					def b(i) {
@@ -446,7 +452,7 @@ if __name__ == "__main__":
 				['''
 				class Foo {
 					def a() {
-						x += 3
+						x = x + 3
 						x
 					}
 					def b(i) {
@@ -461,15 +467,15 @@ if __name__ == "__main__":
 				a = f.x
 				'''],
 				[
-					'None', "Foo : (class : Foo, local_env : Foo : (Func : Foo), a : (Func : a), b : (Func : b), this : this, x : 2, y : 3,), a : 2, f : (InstanceInfo"
-					" [class_name : Foo, local_env : this : this,, ]),"
+					'None', "Foo : (class : Foo, local_env : Foo : (Func : Foo), a : (Func : a), b : (Func : b), this : this, x : 3, y : 3,), a : 2, f : (InstanceInfo"
+					" [class_name : Foo, local_env : this : this, x : 2,, ]),"
 				],
 			],
 			[
 				['''
 				class Foo {
 					def a() {
-						x += 3
+						x = x + 3
 						x
 					}
 					def b(i) {
@@ -484,15 +490,15 @@ if __name__ == "__main__":
 				a = f.b(10)
 				'''],
 				[
-					'None', "Foo : (class : Foo, local_env : Foo : (Func : Foo), a : (Func : a), b : (Func : b), this : this, x : 2, y : 3,), a : 12, f : (InstanceInfo "
-					"[class_name : Foo, local_env : this : this,, ]),"
+					'None', "Foo : (class : Foo, local_env : Foo : (Func : Foo), a : (Func : a), b : (Func : b), this : this, x : 3, y : 3,), a : 12, f : (InstanceInfo "
+					"[class_name : Foo, local_env : this : this, x : 2,, ]),"
 				],
 			],
 			[
 				['''
 				class Foo {
 					def a() {
-						x += 3
+						x = x + 3
 						x
 					}
 					def b(i) {

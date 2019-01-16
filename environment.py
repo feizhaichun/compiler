@@ -8,10 +8,18 @@ class Environment(object):
 
 
 class NestedEnvironment(Environment):
-	def __init__(self, outer=None):
+	def __init__(self, outer=None, consts=None):
 		super(NestedEnvironment, self).__init__()
 		self.names = {}
 		self.outer = outer
+
+		# 常量
+		if consts is None:
+			self.consts = []
+		else:
+			self.consts = consts
+
+		self.bytecodes = []
 
 		if self.outer is not None:
 			self.is_nested_instance = self.outer.is_nested_instance
@@ -48,6 +56,17 @@ class NestedEnvironment(Environment):
 	# 找到name对应的index
 	def lookup(self, name):
 		return -1
+
+	# 常量相关
+	def assign_const(self, val):
+		self.consts.append(val)
+		return len(self.consts) - 1
+
+	def get_consts(self):
+		return self.consts
+
+	def set_consts(self, consts):
+		self.consts = consts
 
 
 # 类/对象空间，必然有一个指向自身的this指针
@@ -97,7 +116,7 @@ class FunEnvironment(NestedEnvironment):
 
 	# 如果调用通用的set/get_val方法，默认从嵌套空间获取
 	def set_val(self, name, val):
-		self.outer.set_val(name, val)
+		return self.outer.set_val(name, val)
 
 	def get_val(self, name):
 		return self.outer.get_val(name)

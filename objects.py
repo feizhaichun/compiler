@@ -24,11 +24,10 @@ class ArrayInfo(object):
 
 
 class Func(object):
-	def __init__(self, name, arglist, block, env, local_size):
+	def __init__(self, name, bytecode, env, local_size):
 		super(Func, self).__init__()
 		self.name = name
-		self.arglist = arglist
-		self.block = block
+		self.bytecode = bytecode
 		self.env = env
 		self.local_size = local_size
 
@@ -47,7 +46,7 @@ class Method(object):
 		self.func = func
 
 	def __str__(self):
-		return "(Method : %s)" % self.name
+		return "(Method : %s)" % self.func.name
 
 	def __repr__(self):
 		return self.__str__()
@@ -64,7 +63,7 @@ class ClassInfo(object):
 		return "(class : %s, local_env : %s)" % (self.name, self.local_env)
 
 	def set_val(self, name, val):
-		self.local_env.set_val(name, val)
+		return self.local_env.set_val(name, val)
 
 	def get_val(self, name):
 		return self.local_env.get_val(name)
@@ -84,7 +83,7 @@ class InstanceInfo(object):
 		return self.__str__()
 
 	def set_val(self, name, val):
-		self.local_env.set_val(name, val)
+		return self.local_env.set_new_val(name, val)
 
 	def get_val(self, name):
 		ret = self.local_env.get_val(name)
