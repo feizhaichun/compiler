@@ -208,6 +208,7 @@ class ClassDefExpr(ASTList):
 		opcodes += ['LOAD_CONST', self.name.const_index]
 
 		if self.father_name is not None:
+			opcodes += ['LOAD_NESTED', self.father_name.const_index]
 		else:
 			opcodes += ['LOAD_CONST', env.assign_const(None)]
 
@@ -302,9 +303,11 @@ class IfExpr(ASTList):
 		self.elseblock = astnode_list[2] if len(astnode_list) == 3 else None
 
 	def eval(self, env):
-		elif self.elseblock:
-			return self.elseblock.eval(env)
-		return None
+		true_codes = self.block.eval(env)
+
+		if self.elseblock:
+			else_codes = self.elseblock.eval(env)
+			true_codes += ['JUMP_FRONT', len(else_codes)]
 		else:
 			else_codes = []
 
